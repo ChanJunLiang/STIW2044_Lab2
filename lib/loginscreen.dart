@@ -1,5 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:my_pickup/mainscreen.dart';
+import 'package:my_pickup/registrationscreen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:toast/toast.dart';
+import 'package:http/http.dart' as http;
+import 'package:progress_dialog/progress_dialog.dart';
+
+String urlLogin = "http://pickupandlaundry.com/my_pickup/chan/php/login.php";
 
 void main() => runApp(MyApp());
 
@@ -79,7 +87,7 @@ class _LoginPageState extends State<LoginPage> {
                     Checkbox(
                       value: _isChecked,
                       onChanged: (bool value) {
-                        
+                        _onChange(value);
                       },
                     ),
                     Text('Remember Me', style: TextStyle(fontSize: 16))
@@ -103,15 +111,108 @@ class _LoginPageState extends State<LoginPage> {
   }
     
     void _onLogin(){
-
+      _email = _emcontroller.text;
+    _password = _passcontroller.text;
+    if (_isEmailValid(_email) && (_password.length > 4)) {
+      ProgressDialog pr = new ProgressDialog(context,
+          type: ProgressDialogType.Normal, isDismissible: false);
+      pr.style(message: "Login in");
+      pr.show();
+      http.post(urlLogin, body: {
+        "email": _email,
+        "password": _password,
+      }).then((res) {
+        print(res.statusCode);
+        Toast.show(res.body, context,
+            duration: Toast.LENGTH_LONG, gravity: Toast.BOTTOM);
+        if (res.body == "success") {
+          pr.dismiss();
+          Navigator.push(
+              context, MaterialPageRoute(builder: (context) => MainScreen(email: _email)));
+        }else{
+          pr.dismiss();
+        }
+        
+      }).catchError((err) {
+        pr.dismiss();
+        print(err);
+      });
+    } else {}
     }
-    void _onForgot(){
 
+    void _onForgot(){
+    print('Forgot');
     }
 
     void _onRegister(){
-
+    print('onRegister');
+    Navigator.push(
+        context, MaterialPageRoute(builder: (context) => RegisterScreen()));
     }
+
+    void _onChange(bool value) {
+    setState(() {
+      _isChecked = value;
+      savepref(value);
+    });
+  }
+
+  void loadpref() async {
+    print('Inside loadpref()');
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    _email = (prefs.getString('email'));
+    _password = (prefs.getString('pass'));
+    print(_email);
+    print(_password);
+    if (_email.length > 1) {
+      _emcontroller.text = _email;
+      _passcontroller.text = _password;
+      setState(() {
+        _isChecked = true;
+      });
+    } else {
+      print('No pref');
+      setState(() {
+        _isChecked = false;
+      });
+    }
+  }
+
+  void savepref(bool value) async {
+    print('Inside savepref');
+    _email = _emcontroller.text;
+    _password = _passcontroller.text;
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (value) {
+      //true save pref
+      if (_isEmailValid(_email) && (_password.length > 5)) {
+        await prefs.setString('email', _email);
+        await prefs.setString('pass', _password);
+        print('Save pref $_email');
+        print('Save pref $_password');
+        Toast.show("Preferences have been saved", context,
+            duration: Toast.LENGTH_SHORT, gravity: Toast.BOTTOM);
+      } else {
+        print('No email');
+        setState(() {
+          _isChecked = false;
+        });
+        Toast.show("Check your credentials", context,
+            duration: Toast.LENGTH_SHORT, gravity: Toast.BOTTOM);
+      }
+    } else {
+      await prefs.setString('email', '');
+      await prefs.setString('pass', '');
+      setState(() {
+        _emcontroller.text = '';
+        _passcontroller.text = '';
+        _isChecked = false;
+      });
+      print('Remove pref');
+      Toast.show("Preferences have been removed", context,
+          duration: Toast.LENGTH_SHORT, gravity: Toast.BOTTOM);
+    }
+  }
 
   Future<bool> _onBackPressAppBar() async {
     SystemNavigator.pop();
@@ -119,5 +220,8 @@ class _LoginPageState extends State<LoginPage> {
     return Future.value(false);
   }
 
+  bool _isEmailValid(String email) {
+    return RegExp(r"^[a-zA-Z0-9.]+@[a-zA-Z0-9]+\.[a-zA-Z]+").hasMatch(email);
+  }
   
 }
